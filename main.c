@@ -1,10 +1,10 @@
-#include <curses.h>
-#include <errno.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include <curses.h> // bool type
+#include <errno.h>  // errorno cosntper
+#include <signal.h> // singal function
+#include <stdio.h>  // format print function
+#include <stdlib.h> // exit function
+#include <string.h> // strerror function
+#include <unistd.h> // sleep function
 
 typedef struct {
   int r;
@@ -18,7 +18,23 @@ bool loop_running = true;
 
 void break_loop(int sig) { loop_running = false; }
 
-int main() {
+#define CHECK_FILE_POINTER(POINTER)                                            \
+  do {                                                                         \
+    if (POINTER == NULL) {                                                     \
+      fprintf(stderr, "Open file faliure: %s\n", strerror(errno));             \
+      exit(1);                                                                 \
+    }                                                                          \
+  } while (0)
+
+#define CHECK_FSCANF_NUMBER(NUMBER, MESSAGE)                                   \
+  do {                                                                         \
+    if (result != NUMBER) {                                                    \
+      fprintf(stderr, "[ERROR]: Read %s form file faliure\n", MESSAGE);        \
+      exit(1);                                                                 \
+    }                                                                          \
+  } while (0)
+
+int main(int argc, char **argv) {
 
   signal(SIGINT, break_loop);
 
@@ -27,27 +43,16 @@ int main() {
 
   // === get data form file
   FILE *fp = fopen(input_path, "r");
-  if (fp == NULL) {
-    fprintf(stderr, "Open file failue: %s\n", strerror(errno));
-    exit(1);
-  }
-
+  CHECK_FILE_POINTER(fp);
   FILE *ppm_p = fopen(output_path, "r+");
-  if (ppm_p == NULL) {
-    fprintf(stderr, "Open ppm file failuer: %s\n", strerror(errno));
-    exit(1);
-  }
+  CHECK_FILE_POINTER(ppm_p);
 
   int ppm_width = 0;
   int ppm_height = 0;
   int ppm_max_value = 0;
   Color bef_c = COLOR_INIT;
   Color cur_c = COLOR_INIT;
-
   size_t result;
-  // [50, 50]
-  // max: 255
-  // Color: {5, 6, 7}
 
   while (loop_running) {
 
@@ -65,18 +70,10 @@ int main() {
 
     result = fscanf(fp, "[%d, %d]\nmax: %d\n", &ppm_width, &ppm_height,
                     &ppm_max_value);
-    if (result != 3) {
-      fprintf(stderr, "[ERROR]: Read data form file failue %s: %s\n",
-              "metadata", strerror(errno));
-      exit(1);
-    }
-
+    CHECK_FSCANF_NUMBER(3, "Meat Data");
     result = fscanf(fp, "Color: {%d, %d, %d}", &cur_c.r, &cur_c.g, &cur_c.b);
-    if (result != 3) {
-      fprintf(stderr, "[ERROR]: Read data form file failue %s: %s\n",
-              "colordata", strerror(errno));
-      exit(1);
-    }
+    CHECK_FSCANF_NUMBER(3, "Color Data");
+
 #ifdef DEBUG
     printf("Reading data...\n");
     printf("matadata: %d %d %d\n", ppm_width, ppm_height, ppm_max_value);
@@ -102,7 +99,6 @@ int main() {
   }
 
   // === clean file pointer
-
   fclose(ppm_p);
   fclose(fp);
   return 0;
