@@ -7,5 +7,3 @@
 ```command
 make // or make build
 ```
-```
-
