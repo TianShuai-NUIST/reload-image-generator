@@ -5,6 +5,8 @@ TARGET := reig
 $(TARGET): $(SRC)
 		$(CC) -o $(TARGET) $(SRC)
 
+build: $(TARGET)
+
 run: $(TARGET)
 		@./$(TARGET)
 
