@@ -18,6 +18,7 @@ bool loop_running = true;
 
 void break_loop(int sig) { loop_running = false; }
 
+// TODO: 修复宏, 使用类OpenGL的内联宏而不是下面的宏
 #define CHECK_FILE_POINTER(POINTER)                                            \
   do {                                                                         \
     if (POINTER == NULL) {                                                     \
@@ -68,11 +69,18 @@ int main(int argc, char **argv) {
 
     fseek(fp, 0, SEEK_SET);
 
-    result = fscanf(fp, "[%d, %d]\nmax: %d\n", &ppm_width, &ppm_height,
-                    &ppm_max_value);
-    CHECK_FSCANF_NUMBER(3, "Meat Data");
-    result = fscanf(fp, "Color: {%d, %d, %d}", &cur_c.r, &cur_c.g, &cur_c.b);
-    CHECK_FSCANF_NUMBER(3, "Color Data");
+    char buf[256];
+    if (!fgets(buf, 256, fp)) {
+      fprintf(stderr, "Open file faliure: %s\n", strerror(errno));
+      exit(1);
+    }
+
+    // TODO: 增加注释的识别 字符提取使用`fgets+sscanf()`.
+    //     result = fscanf(fp, "[%d, %d]\nmax: %d\n", &ppm_width, &ppm_height,
+    //                     &ppm_max_value);
+    //     CHECK_FSCANF_NUMBER(3, "Meat Data");
+    //     result = fscanf(fp, "Color: {%d, %d, %d}", &cur_c.r, &cur_c.g,
+    //     &cur_c.b); CHECK_FSCANF_NUMBER(3, "Color Data");
 
 #ifdef DEBUG
     printf("Reading data...\n");
