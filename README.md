@@ -7,3 +7,7 @@
 ```command
 make // or make build
 ```
+
+# 信号处理机制
+
+1. `signal` 不安全, 使用`sigaction`函数.
