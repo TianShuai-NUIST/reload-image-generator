@@ -1,3 +1,6 @@
 in.fp
 output.ppm
 reig
+.disable
+.ctags
+.tags.sys
