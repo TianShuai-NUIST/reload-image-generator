@@ -33,6 +33,38 @@ static void handle_signal(int sig){
   g_running = 0;
 }
 
+static bool spec_equal(const ImageSpec *a, const ImageSpec *b){
+  if(a->width != b->width)       return false;
+  if(a->height != b->height)     return false;
+  if(a->maxValue != b->maxValue) return false;
+  if(a->color.r != b->color.r)   return false;
+  if(a->color.g != b->color.g)   return false;
+  if(a->color.b != b->color.b)   return false;
+  return true;
+}
+
+static bool write_ppm(const char* path, const ImageSpec *spec){
+  FILE *fp = fopen(path, "w");
+  if(fp == NULL){
+    fprintf(stderr, "[ERROR]: (%s) %s\n", path, strerror(errno));
+    return false;
+  }
+  fprintf(fp, "P3\n%d %d\n%d\n", spec->width, spec->height, spec->maxValue);
+  for (int i = 0; i < spec->height; i++) {
+    for (int j = 0; j < spec->width; j++) {
+      fprintf(fp, "%d %d %d ", spec->color.r, spec->color.g, spec->color.b);
+    }
+    fprintf(fp, "\n");
+  }
+  fflush(fp);
+  if(ferror(fp)){
+    fclose(fp);
+    return false;
+  }
+  if(fclose(fp) != 0) return false;
+  return true;
+}
+
 static bool parse_config(FILE *fp, ImageSpec *out, char* err, size_t err_size){
   char line[256];
   int line_no = 0;
@@ -98,7 +130,7 @@ static bool parse_config(FILE *fp, ImageSpec *out, char* err, size_t err_size){
   return true;
 }
 
-int main() {
+int main(void) {
   struct sigaction sa;
   sa.sa_handler = handle_signal;
   sigemptyset(&sa.sa_mask);
@@ -110,69 +142,43 @@ int main() {
   const char *input_path = "./in.fp";
   const char *output_path = "./output.ppm";
 
+  ImageSpec prev = {0};
+  bool first_frame = true;
   // === get data form file
-  FILE *fp = fopen(input_path, "r");
-  if (fp == NULL) {
-    fprintf(stderr, "Open \"%s\" faliure %d: %s\n", input_path, __LINE__, strerror(errno));
-    exit(1);
-  }
-  FILE *ppm_p = fopen(output_path, "w+");
-  if (ppm_p == NULL) {
-    fprintf(stderr, "Open \"%s\" faliure %d: %s\n", output_path, __LINE__, strerror(errno));
-    exit(1);
-  }
-
-  int ppm_width     = 0;
-  int ppm_height    = 0;
-  int ppm_max_value = 0;
-  Color bef_c       = COLOR_INIT;
-  Color cur_c       = COLOR_INIT;
 
   while(g_running) {
-
-#ifndef DEBUG
-    printf("\r\033[0k");
-    printf("\rReading data...\n");
-    fflush(stdout);
-#endif
-
     sleep(1);
-    fp = freopen(input_path, "r", fp);
 
     char err[256];
-    ImageSpec spac;
-    if(!parse_config(fp, &spac, err, sizeof(err))){
+    ImageSpec spec;
+
+    FILE *fp = fopen(input_path, "r");
+    if (fp == NULL) {
+      fprintf(stderr, "Open \"%s\" faliure %d: %s\n", input_path, __LINE__, strerror(errno));
+      continue;
+    }
+
+    bool ok = parse_config(fp, &spec, err, sizeof(err));
+    fclose(fp);
+
+    if(!ok){
       fprintf(stderr, "[ERROR]: %s\n", err);
-      exit(1);
+      continue;
     }
 
-
-#ifdef DEBUG
-    printf("Reading data...\n");
-    printf("matadata: %d %d %d\n", ppm_width, ppm_height, ppm_max_value);
-    printf("Color data: %d %d %d\n", cur_c.r, cur_c.g, cur_c.b);
-#endif
-
-    if (bef_c.r != cur_c.r || bef_c.g != cur_c.g || bef_c.b != cur_c.b) {
-      printf("\n[Info] Change data to {%d, %d, %d}\n", cur_c.r, cur_c.g,
-             cur_c.b);
-      // === write data into file
-      fseek(ppm_p, 0, SEEK_SET);
-      fprintf(ppm_p, "P3\n%d %d\n%d\n", ppm_width, ppm_height, ppm_max_value);
-      for (int i = 0; i < ppm_height; i++) {
-        for (int j = 0; j < ppm_width; j++) {
-          fprintf(ppm_p, "%d %d %d ", cur_c.r, cur_c.g, cur_c.b);
-        }
-        fprintf(ppm_p, "\n");
+    if(first_frame || !spec_equal(&spec, &prev)){
+      if(write_ppm(output_path, &spec)){
+        printf("[Info] %dx%d max %d color {%d, %d, %d}\n",
+               spec.width, spec.height, spec.maxValue,
+               spec.color.r, spec.color.g, spec.color.b);
+        prev = spec;
+        first_frame = false;
+      }else{
+        fprintf(stderr, "[ERROR] write \"%s\" failed\n", output_path);
       }
-      fflush(ppm_p);
     }
-
-    bef_c = cur_c;
   }
+  printf("[Info] exit on signal %d\n", (int)g_last_signal);
 
-  // === clean file pointer
-  fclose(ppm_p);
-  fclose(fp);
   return 0;
 }
