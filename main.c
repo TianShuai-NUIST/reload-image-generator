@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <string.h> // strerror function
 #include <unistd.h> // sleep function
+#include <limits.h>
+#include <sys/stat.h>
 
 #define MAX_SIZE 8192
 
@@ -44,7 +46,11 @@ static bool spec_equal(const ImageSpec *a, const ImageSpec *b){
 }
 
 static bool write_ppm(const char* path, const ImageSpec *spec){
-  FILE *fp = fopen(path, "w");
+  // 原子读写
+  char tmp_path[PATH_MAX];
+  snprintf(tmp_path, sizeof(tmp_path), "%s.temp", path);
+
+  FILE *fp = fopen(tmp_path, "w");
   if(fp == NULL){
     fprintf(stderr, "[ERROR]: (%s) %s\n", path, strerror(errno));
     return false;
@@ -59,9 +65,19 @@ static bool write_ppm(const char* path, const ImageSpec *spec){
   fflush(fp);
   if(ferror(fp)){
     fclose(fp);
+    remove(tmp_path);
     return false;
   }
-  if(fclose(fp) != 0) return false;
+  if(fclose(fp) != 0){
+    remove(tmp_path);
+    return false;
+  }
+
+  if(rename(tmp_path, path) != 0){
+    fprintf(stderr, "[ERROR] rename \"%s\" -> \"%s\": %s\n", tmp_path, path, strerror(errno));
+    remove(tmp_path);
+    return false;
+  }
   return true;
 }
 
@@ -130,7 +146,17 @@ static bool parse_config(FILE *fp, ImageSpec *out, char* err, size_t err_size){
   return true;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+  setvbuf(stdout, NULL, _IOLBF, 0);
+
+  if (argc > 3) {
+    fprintf(stderr, "usage: %s [input.fp] [output.ppm]\n", argv[0]);
+    return EXIT_FAILURE;
+  }
+
+  const char *input_path = argc > 1 ? argv[1] : "./in.fp";
+  const char *output_path = argc > 2 ? argv[2] : "./output.ppm";
+
   struct sigaction sa;
   sa.sa_handler = handle_signal;
   sigemptyset(&sa.sa_mask);
@@ -139,15 +165,26 @@ int main(void) {
   sigaction(SIGINT, &sa, NULL);
   sigaction(SIGTERM, &sa, NULL);
 
-  const char *input_path = "./in.fp";
-  const char *output_path = "./output.ppm";
+  struct timespec last_mtime = {0, 0};
+  // 首次无条件执行
+  off_t last_size = -1;
 
   ImageSpec prev = {0};
+  // 首次无条件执行
   bool first_frame = true;
-  // === get data form file
-
   while(g_running) {
     sleep(1);
+    struct stat st;
+    if(stat(input_path, &st) == 0){
+      if(st.st_size == last_size &&
+        st.st_mtim.tv_sec == last_mtime.tv_sec &&
+        st.st_mtim.tv_nsec == last_mtime.tv_nsec
+      ){
+        continue;
+      }
+      last_mtime = st.st_mtim;
+      last_size = st.st_size;
+    }
 
     char err[256];
     ImageSpec spec;
