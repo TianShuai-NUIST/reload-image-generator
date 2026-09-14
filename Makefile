@@ -39,7 +39,7 @@ $(BUILD_DIR)/%.o: src/%.c
 build: $(TARGET)
 
 run: $(TARGET)
-	@./$(TARGET)
+	@./$(TARGET) ./scripts/in.fp
 
 clean:
 	-rm -rf ./$(BUILD_DIR)

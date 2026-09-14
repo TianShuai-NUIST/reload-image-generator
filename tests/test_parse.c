@@ -1,7 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 // 上面一行, 不能删, 移植性问题, 别问
 #include <stdio.h>
-#include <assert.h>
 #include <string.h>
 
 #include "config.h"
@@ -74,7 +73,7 @@ static void test_zero_color(void){
   ASSERT_TRUE(parse_text(text, &spec, err, sizeof(err)));
 }
 
-static void assert_basic(void){
+static void test_basic(void){
   const char *text = "[100, 50]\nmax: 255\nColor : {56, 10, 59}\n";
   ImageSpec spec;
   char err[256];
@@ -97,7 +96,7 @@ int main(void){
   test_garbage_line();
   test_comments_and_blank();
   test_no_space();
-  assert_basic();
+  test_basic();
 
   TEST_SUMMARY();
   return 0;
