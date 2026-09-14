@@ -14,4 +14,8 @@ make // or make build
 - [x] 解析改进
 - [x] 原子写入
 - [x] 变更文件读取
-- [] 文件模块化
+- [x] 文件模块化
+- [x] P6 PPM format
+- [ ] inotify 通知代替轮询
+
+- [ ] README 优化
