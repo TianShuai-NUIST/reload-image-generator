@@ -4,4 +4,6 @@ reig
 .disable
 .ctags
 .tags.sys
-DOC.md
+doc
+build/
+gmon.out
