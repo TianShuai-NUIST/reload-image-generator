@@ -2,10 +2,8 @@
 #include <signal.h> // singal function
 #include <stdio.h>  // format print function
 #include <stdlib.h> // exit function
-#include <stdbool.h>
 #include <string.h> // strerror function
 #include <unistd.h> // sleep function
-#include <limits.h>
 #include <sys/stat.h>
 
 #include "types.h"
@@ -39,6 +37,7 @@ int main(int argc, char **argv) {
   ImageSpec prev = {0};
   // 首次无条件执行
   bool first_frame = true;
+
   while(g_running) {
     sleep(1);
     struct stat st;
