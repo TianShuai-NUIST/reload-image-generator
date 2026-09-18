@@ -75,12 +75,13 @@ int main(int argc, char **argv) {
   off_t last_size = -1; // 首次无条件执行
   ImageSpec prev = {0};
   bool first_frame = true; // 首次无条件执行
+  // 只有环境问题才会触发计数, 解析问题不计
   unsigned int error_times = 0;
 
   while(g_running) {
     // sleep(1);
     if(error_times > ERROR_MAX){
-      fprintf(stderr, "error times to much: %d!\n", error_times);
+      fprintf(stderr, "连续错误次数过多: %d!\n", error_times);
       exit(EXIT_FAILURE);
     }
 
@@ -111,8 +112,7 @@ int main(int argc, char **argv) {
       }else if(pfd.revents & POLLERR || pfd.revents & POLLHUP || pfd.revents & POLLNVAL){
         // Check event of poll
         error_times++;
-        perror("poll(events)");
-        fprintf(stderr, "[ERROR]: poll evnets get error! (revents :%d)\n", pfd.revents);
+        fprintf(stderr, "[ERROR]: poll events get error! (revents :%d)\n", pfd.revents);
       }
     }else if(result_poll == 0){
       // do nothing... (goto stat)
@@ -132,6 +132,7 @@ int main(int argc, char **argv) {
         st.st_mtim.tv_sec == last_mtime.tv_sec &&
         st.st_mtim.tv_nsec == last_mtime.tv_nsec
       ){
+        error_times = 0;
         continue;
       }
       last_mtime = st.st_mtim;
@@ -144,6 +145,7 @@ int main(int argc, char **argv) {
     FILE *fp = fopen(input_path, "r");
     if (fp == NULL) {
       fprintf(stderr, "Open \"%s\" faliure %d: %s\n", input_path, __LINE__, strerror(errno));
+      error_times = 0; // 文件打开失败没关系, 这不是运行系统的问题, 所以错误次数不算
       continue;
     }
 
@@ -152,6 +154,7 @@ int main(int argc, char **argv) {
 
     if(!ok){
       fprintf(stderr, "[ERROR]: %s\n", err);
+      error_times = 0; // 不是环境问题
       continue;
     }
 

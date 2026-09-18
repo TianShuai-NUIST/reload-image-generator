@@ -5,7 +5,8 @@ BUILD_DIR := build
 SRCS := $(wildcard src/*.c)
 OBJS := $(patsubst src/%.c, build/%.o, $(SRCS))
 
-TARGET := $(BUILD_DIR)/reig
+# TARGET := $(BUILD_DIR)/reig
+TARGET := reig
 
 TEST_SRC := tests/test_parse.c
 TEST_BIN := $(BUILD_DIR)/test_parse
@@ -30,7 +31,7 @@ profile: LDFLAGS += -pg
 profile: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $(OBJS) $(LDLIBS) $(LDFLAGS)
+	$(CC) -o $(BUILD_DIR)/$@ $(OBJS) $(LDLIBS) $(LDFLAGS)
 
 $(BUILD_DIR)/%.o: src/%.c
 	@mkdir -p $(BUILD_DIR)
@@ -39,7 +40,8 @@ $(BUILD_DIR)/%.o: src/%.c
 build: $(TARGET)
 
 run: $(TARGET)
-	@./$(TARGET) ./scripts/in.fp
+	@cd $(BUILD_DIR) && ./$(TARGET) ../scripts/in.fp
+	# @./$(TARGET) ./scripts/in.fp
 
 clean:
 	-rm -rf ./$(BUILD_DIR)
