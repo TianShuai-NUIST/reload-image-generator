@@ -8,3 +8,4 @@ doc
 build/
 gmon.out
 verify
+compile_commands.json
