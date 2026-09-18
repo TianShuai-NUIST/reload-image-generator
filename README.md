@@ -17,5 +17,6 @@ make // or make build
 - [x] 文件模块化
 - [x] P6 PPM format
 - [x] inotify 通知代替轮询
+- [ ] 脚本语法重置
 
 - [ ] README 优化
