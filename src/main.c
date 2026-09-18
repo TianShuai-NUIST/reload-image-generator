@@ -4,12 +4,20 @@
 #include <stdlib.h> // exit function
 #include <string.h> // strerror function
 #include <unistd.h> // sleep function
-#include <sys/stat.h>
+#include <sys/stat.h> // struct stat
+#include <sys/inotify.h>
+#include <limits.h>
+#include <assert.h> 
+#include <stdalign.h> // get align of type
+#include <poll.h> // poll function to get event
 
 #include "types.h"
 #include "utils.h"
 #include "config.h"
 #include "ppm.h"
+
+// 超过 ERROR_MAX 次数就退出
+#define ERROR_MAX 5
 
 int main(int argc, char **argv) {
   setvbuf(stdout, NULL, _IOLBF, 0);
@@ -22,6 +30,39 @@ int main(int argc, char **argv) {
   const char *input_path = argc > 1 ? argv[1] : "./in.fp";
   const char *output_path = argc > 2 ? argv[2] : "./output.ppm";
 
+  char input_path_dir[PATH_MAX];
+  char input_path_base[NAME_MAX];
+  // slash 指向最后一个'/'的位置, 以此为界, 前面是dir, 后面是base
+  const char *slash = strrchr(input_path, '/');
+  if(slash != NULL){
+    // ./in.fp
+    // /home/.../in.fp
+    // 最后一个'/'与开头的距离就是dir 
+    size_t n = (size_t)(slash - input_path);
+    n = n == 0 ? 1 : n;
+      assert(n < PATH_MAX);
+    memcpy(input_path_dir, input_path, n);
+    input_path_dir[n] = '\0';
+
+    snprintf(input_path_base, sizeof(input_path_base), "%s", (slash + 1));
+  }else{
+    // 输入字符串没有'/', 所以只能是in.fp这种
+    snprintf(input_path_dir, sizeof(input_path_dir), ".");
+    snprintf(input_path_base, sizeof(input_path_base), "%s", input_path);
+  }
+
+  int ifd = inotify_init1(IN_CLOEXEC);
+  if(ifd < 0){
+    perror("inotify_init1");
+    return EXIT_FAILURE;
+  }
+  int wd;
+  if((wd = inotify_add_watch(ifd, input_path_dir, IN_CLOSE_WRITE | IN_MOVED_TO | IN_DELETE))< 0){
+    perror("inotify_add_watch");
+    return EXIT_FAILURE;
+  }
+  printf("[INFO]: watch \"%s\" in \"%s\"\n", input_path_base, input_path_dir);
+
   struct sigaction sa;
   sa.sa_handler = handle_signal;
   sigemptyset(&sa.sa_mask);
@@ -31,15 +72,60 @@ int main(int argc, char **argv) {
   sigaction(SIGTERM, &sa, NULL);
 
   struct timespec last_mtime = {0, 0};
-  // 首次无条件执行
-  off_t last_size = -1;
-
+  off_t last_size = -1; // 首次无条件执行
   ImageSpec prev = {0};
-  // 首次无条件执行
-  bool first_frame = true;
+  bool first_frame = true; // 首次无条件执行
+  unsigned int error_times = 0;
 
   while(g_running) {
-    sleep(1);
+    // sleep(1);
+    if(error_times > ERROR_MAX){
+      fprintf(stderr, "error times to much: %d!\n", error_times);
+      exit(EXIT_FAILURE);
+    }
+
+    struct pollfd pfd = {
+      .fd = ifd,
+      .events = POLLIN
+    };
+    int result_poll = poll(&pfd, 1, 1000);
+
+    if(result_poll > 0 ){
+      if(pfd.revents & POLLIN){
+        alignas(struct inotify_event) char buf[4096];
+        ssize_t n = read(ifd, buf, sizeof buf);
+        if(n < 0){
+          if(errno != EINTR){
+            error_times++;
+            perror("read(inotify)");
+          }
+          continue;
+        }
+        char *p = buf;
+        while(p < buf + n){
+          struct inotify_event *cur = (struct inotify_event *)p;
+          printf("[Event] mask=0x%x len=%u name=\"%s\"\n",
+                 cur->mask, cur->len, cur->len > 0 ? cur->name : "");
+          p += sizeof(struct inotify_event) + cur->len;
+        }
+      }else if(pfd.revents & POLLERR || pfd.revents & POLLHUP || pfd.revents & POLLNVAL){
+        // Check event of poll
+        error_times++;
+        perror("poll(events)");
+        fprintf(stderr, "[ERROR]: poll evnets get error! (revents :%d)\n", pfd.revents);
+      }
+    }else if(result_poll == 0){
+      // do nothing... (goto stat)
+    }else if(result_poll == -1){
+      if(errno != EINTR){
+        perror("poll(events)");
+        error_times++;
+      }
+      continue;
+    }
+
+    // 我不想成为老古董, 所以这里我使用了C11的语法, 而不是非GNU扩展, 这个玩意只需要知道就可以了, 太丑陋了.
+    // char buf[4096] __attribute__((aligned(__alignof__(struct inotify_event))));
     struct stat st;
     if(stat(input_path, &st) == 0){
       if(st.st_size == last_size &&
@@ -71,7 +157,7 @@ int main(int argc, char **argv) {
 
     if(first_frame || !spec_equal(&spec, &prev)){
       if(write_ppm(output_path, &spec)){
-        printf("[Info] %dx%d max %d color {%d, %d, %d}\n",
+        printf("[INFO]: %dx%d max %d color {%d, %d, %d}\n",
                spec.width, spec.height, spec.maxValue,
                spec.color.r, spec.color.g, spec.color.b);
         prev = spec;
@@ -80,8 +166,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "[ERROR] write \"%s\" failed\n", output_path);
       }
     }
+
+    error_times = 0;
   }
-  printf("[Info] exit on signal %d\n", (int)g_last_signal);
+  printf("[INFO]: exit on signal %d\n", (int)g_last_signal);
 
   return 0;
 }
